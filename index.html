@@ -92,6 +92,7 @@
 
         window.onload = async function() {
             try {
+                // 1. Busca a lista de produtos normalmente no seu backend Python
                 const response = await fetch(`${API_BASE}/api/produtos`);
                 cacheProdutos = await response.json();
                 
@@ -124,6 +125,26 @@
                     `;
                 }
 
+                // 2. CONTORNO DO BLOQUEIO: O próprio navegador busca o Dólar na internet aberta
+                try {
+                    const resDolarDireto = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
+                    const dadosDolarDireto = await resDolarDireto.json();
+                    const cotacaoReal = float = parseFloat(dadosDolarDireto["USDBRL"]["bid"]);
+                    document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
+                    console.log("Dólar atualizado direto via Frontend: R$", cotacaoReal);
+                } catch (erroFrontend) {
+                    console.warn("Falha ao buscar dólar pelo navegador, tentando via Python...", erroFrontend);
+                    // Fallback caso a internet do usuário bloqueie: tenta puxar o padrão do Python
+                    const resDolar = await fetch(`${API_BASE}/api/dolar`);
+                    const dadosDolar = await resDolar.json();
+                    document.getElementById('dolar_dia').value = dadosDolar.cotacao.toFixed(4);
+                }
+                
+                calcularTudoEmTempoReal();
+            } catch (e) {
+                console.error("Erro ao inicializar front-end:", e);
+            }
+        };
                 const resDolar = await fetch(`${API_BASE}/api/dolar`);
                 const dadosDolar = await resDolar.json();
                 document.getElementById('dolar_dia').value = dadosDolar.cotacao.toFixed(4);
