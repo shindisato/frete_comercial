@@ -11,7 +11,6 @@ app = FastAPI(title="Calculadora de Cubagem Multitens - Revisada")
 CEP_ORIGEM_PADRAO = "37642162"
 ENDERECO_ORIGEM = "Rua das Flores, 123 - Distrito Industrial, Extrema - MG"
 
-# Liberação de segurança para o HTML local/externo conversar com o Python
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Matriz de Caixas oficiais da sua planilha
 MATRIZ_CAIXAS = {
     "1": {"nome": "CX 1", "comprimento": 16, "largura": 10, "altura": 5, "peso_vazia_g": 50},
     "2": {"nome": "CX 2", "comprimento": 18, "largura": 11, "altura": 12, "peso_vazia_g": 70},
@@ -30,7 +28,6 @@ MATRIZ_CAIXAS = {
     "6": {"nome": "CX 6 (Lumini)", "comprimento": 43, "largura": 26, "altura": 23, "peso_vazia_g": 420}
 }
 
-# Banco de Dados de Produtos com pesos e limites de cubagem
 PRODUTOS_DB = {
     "ST8210": {"nome": "ST8210 / 8310UM / ST4215U", "peso_g": 78, "max_por_caixa": {"1": 5, "2": 15, "3": 30, "4": 60, "5": 150}},
     "ST340U": {"nome": "ST340U / UR / US", "peso_g": 107, "max_por_caixa": {"1": 4, "2": 10, "3": 25, "4": 50, "5": 110}},
@@ -104,17 +101,18 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
     peso_total_produtos_g = 0
     caixa_sugerida_id = 1
     possui_lumini = False
-    
+    total_volumes = 1  # Nova variável de controle comercial
+
     for item in itens_validos:
         prod_id = item.produto_id
         if prod_id == "W16":
             possui_lumini = True
             
-        produto = PRODUTOS_DB.get(prod_id, PROVISIONAL_DB := PRODUTOS_DB["OUTROS"])
+        produto = PRODUTOS_DB.get(prod_id, PRODUTOS_DB["OUTROS"])
         qtd = item.quantidade
         peso_total_produtos_g += (produto["peso_g"] * qtd)
         
-        # Correção da Lógica Matemática de Acúmulo de Volume por Caixa
+        # 1. Identifica o tamanho de caixa necessário para a linha atual
         caixa_item_id = 1
         for c_id in ["1", "2", "3", "4", "5", "6"]:
             limite_max = produto["max_por_caixa"].get(c_id, 9999)
@@ -122,14 +120,17 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
                 caixa_item_id = int(c_id)
                 break
         else:
-            # Caso estoure até a CX 5, força a maior caixa padrão e emite um aviso conceitual interno
+            # 2. SE ESTOURAR A CAPACIDADE MÁXIMA DA CAIXA 5/6: Calcula o desmembramento de volumes
             caixa_item_id = 5
+            limite_caixa_max = float(produto["max_por_caixa"].get("5", 100))
+            volumes_deste_item = math.ceil(qtd / limite_caixa_max)
+            if volumes_deste_item > total_volumes:
+                total_volumes = volumes_deste_item
             
-        # O sistema sempre escolhe a MAIOR caixa demandada pela combinação de itens do lote
         if caixa_item_id > caixa_sugerida_id:
             caixa_sugerida_id = caixa_item_id
 
-    # TRAVA DE ENGENHARIA DA LUMINI (CX 6 é exclusiva e obrigatória para o W16 se chegar no patamar da CX 5)
+    # Ajuste de engenharia da Lumini para a maior caixa
     str_caixa_id = str(caixa_sugerida_id)
     if str_caixa_id == "6" and not possui_lumini:
         str_caixa_id = "5"
@@ -137,16 +138,19 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         str_caixa_id = "6"
 
     dados_caixa = MATRIZ_CAIXAS[str_caixa_id]
-    peso_final_com_caixa_g = peso_total_produtos_g + dados_caixa["peso_vazia_g"]
     
-    # Regra financeira do seguro da Nota Fiscal
+    # 3. O peso da embalagem agora multiplica pela quantidade real de volumes gerados
+    peso_final_com_caixa_g = peso_total_produtos_g + (dados_caixa["peso_vazia_g"] * total_volumes)
+    
     nf_limpa = req.valor_nf if req.valor_nf else 0.0
     taxa_nf = 100.00 if nf_limpa > 10000.00 else (nf_limpa * 0.01)
 
     prefixo_cep = int(req.cep_destino.replace("-","")[:2]) if len(req.cep_destino) >= 2 else 10
     base = 24.50 if prefixo_cep < 40 else 48.00
     
-    valor_final_frete = base + ((peso_final_com_caixa_g/1000) * 3.50) + taxa_nf
+    # Ajuste financeiro: Adiciona uma taxa incremental leve por volume extra para cobrir o manuseio
+    taxa_volumes_extra = (total_volumes - 1) * 8.50
+    valor_final_frete = base + ((peso_final_com_caixa_g/1000) * 3.50) + taxa_nf + taxa_volumes_extra
 
     return {
         "caixa_sugerida": dados_caixa["nome"],
@@ -158,7 +162,8 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         "preco_estimado": f"{valor_final_frete:.2f}".replace(".", ","),
         "origem": CEP_ORIGEM_PADRAO,
         "endereco_origem": ENDERECO_ORIGEM,
-        "valor_nf_formatado": f"R$ {nf_limpa:.2f}".replace(".", ",")
+        "valor_nf_formatado": f"R$ {nf_limpa:.2f}".replace(".", ","),
+        "total_volumes": total_volumes  # Devolve o número real de caixas calculadas
     }
 
 if __name__ == "__main__":
