@@ -78,7 +78,7 @@
                 </div>
             </div>
 
-            <div class="text-[10px] text-slate-400 border-t pt-2 text-center">Fonte: Vozes da cabeça do Shindi</div>
+            <div class="text-[10px] text-slate-400 border-t pt-2 text-center">Foco Comercial: Risco Zero de Prejuízo Logístico</div>
         </div>
 
     </div>
@@ -90,66 +90,48 @@
         let copiaSedexText = "";
         let copiaTranspText = "";
 
-       window.onload = function() {
-            // 1. Busca a lista de produtos no seu backend Python usando .then()
-            fetch(API_BASE + "/api/produtos")
-                .then(function(response) { return response.json(); })
-                .then(function(produtos) {
-                    cacheProdutos = produtos;
-                    var tbody = document.getElementById('corpo-tabela-produtos');
-                    tbody.innerHTML = "";
+        window.onload = async function() {
+            try {
+                // 1. Busca a lista de produtos no backend Python
+                const response = await fetch(`${API_BASE}/api/produtos`);
+                cacheProdutos = await response.json();
+                
+                const tbody = document.getElementById('corpo-tabela-produtos');
+                tbody.innerHTML = "";
+                
+                for(let i = 1; i <= 10; i++) {
+                    let optionsHtml = '<option value="">-- Selecione o Modelo --</option>';
+                    cacheProdutos.forEach(p => {
+                        optionsHtml += `<option value="${p.id}">${p.nome}</option>`;
+                    });
                     
-                    for(var i = 1; i <= 10; i++) {
-                        var optionsHtml = '<option value="">-- Selecione o Modelo --</option>';
-                        cacheProdutos.forEach(function(p) {
-                            optionsHtml += '<option value="' + p.id + '">' + p.nome + '</option>';
-                        });
-                        
-                        tbody.innerHTML += `
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-1 px-2">
-                                    <select id="prod_${i}" onchange="calcularTudoEmTempoReal()" class="w-full text-xs p-1 bg-transparent border border-slate-200 rounded focus:bg-white focus:outline-none">
-                                        ${optionsHtml}
-                                    </select>
-                                </td>
-                                <td class="p-1 text-center">
-                                    <input type="number" id="qtd_${i}" placeholder="0" min="1" oninput="calcularTudoEmTempoReal()" class="w-full text-xs p-1 border border-slate-200 rounded text-center focus:outline-none">
-                                </td>
-                                <td class="p-1">
-                                    <input type="number" id="val_${i}" placeholder="0.00" min="0" step="0.01" oninput="calcularTudoEmTempoReal()" class="w-full text-xs p-1 border border-slate-200 rounded text-right focus:outline-none">
-                                </td>
-                                <td class="p-1 text-right text-xs font-semibold text-slate-600 pr-3 bg-slate-50" id="linha_reais_${i}">
-                                    R$ 0,00
-                                Dino</td>
-                            </tr>
-                        `;
-                    }
-                    
-                    // 2. Busca o Dólar Comercial direto pelo Navegador sem usar await
-                    return fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
-                })
-                .then(function(resDolar) { return resDolar.json(); })
-                .then(function(dadosDolar) {
-                    var cotacaoReal = parseFloat(dadosDolar["USDBRL"]["bid"]);
-                    document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
-                    console.log("Dólar atualizado via Navegador: R$", cotacaoReal);
-                    calcularTudoEmTempoReal();
-                })
-                .catch(function(erro) {
-                    console.warn("Falha na automação principal, aplicando fallback...", erro);
-                    // Se a API falhar, define o dólar padrão de segurança diretamente
-                    document.getElementById('dolar_dia').value = "5.2000";
-                    calcularTudoEmTempoReal();
-                });
-        };
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-1 px-2">
+                                <select id="prod_${i}" onchange="calcularTudoEmTempoReal()" class="w-full text-xs p-1 bg-transparent border border-slate-200 rounded focus:bg-white focus:outline-none">
+                                    ${optionsHtml}
+                                </select>
+                            </td>
+                            <td class="p-1 text-center">
+                                <input type="number" id="qtd_${i}" placeholder="0" min="1" oninput="calcularTudoEmTempoReal()" class="w-full text-xs p-1 border border-slate-200 rounded text-center focus:outline-none">
+                            </td>
+                            <td class="p-1">
+                                <input type="number" id="val_${i}" placeholder="0.00" min="0" step="0.01" oninput="calcularTudoEmTempoReal()" class="w-full text-xs p-1 border border-slate-200 rounded text-right focus:outline-none">
+                            </td>
+                            <td class="p-1 text-right text-xs font-semibold text-slate-600 pr-3 bg-slate-50" id="linha_reais_${i}">
+                                R$ 0,00
+                            </td>
+                        </tr>
+                    `;
+                }
 
-                // 2. Busca o Dólar Comercial direto pelo Navegador de forma limpa
+                // 2. Busca o Dólar Comercial diretamente pelo Navegador (Evita bloqueio CORS/Nuvem)
                 try {
                     const resDolarDireto = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
                     const dadosDolarDireto = await resDolarDireto.json();
                     const cotacaoReal = parseFloat(dadosDolarDireto["USDBRL"]["bid"]);
                     document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
-                    console.log("Dólar atualizado via Navegador: R$", cotacaoReal);
+                    console.log("Dólar obtido via Navegador: R$", cotacaoReal);
                 } catch (erroFrontend) {
                     console.warn("Falha ao buscar pelo navegador, tentando via Python...", erroFrontend);
                     try {
@@ -161,68 +143,8 @@
                     }
                 }
 
-                // Calcula os valores iniciais da tabela
                 calcularTudoEmTempoReal();
 
-            } catch (e) {
-                console.error("Erro ao inicializar front-end:", e);
-            }
-        };
-
-                // 2. CORREÇÃO DA SINTAXE: Função autoverificável para buscar o dólar de forma isolada e assíncrona
-                const buscarDolarNoNavegador = async () => {
-                    try {
-                        const resDolarDireto = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
-                        const dadosDolarDireto = await resDolarDireto.json();
-                        const cotacaoReal = parseFloat(dadosDolarDireto["USDBRL"]["bid"]);
-                        document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
-                        console.log("Dólar atualizado direto via Frontend: R$", cotacaoReal);
-                    } catch (erroFrontend) {
-                        console.warn("Falha ao buscar dólar pelo navegador, tentando via Python...", erroFrontend);
-                        try {
-                            const resDolar = await fetch(`${API_BASE}/api/dolar`);
-                            const dadosDolar = await resDolar.json();
-                            document.getElementById('dolar_dia').value = dadosDolar.get = dadosDolar.cotacao.toFixed(4);
-                        } catch (e) {
-                            document.getElementById('dolar_dia').value = "5.2000";
-                        }
-                    }
-                    calcularTudoEmTempoReal();
-                };
-
-                // Executa a busca do dólar de forma segura
-                await buscarDolarNoNavegador();
-
-            } catch (e) {
-                console.error("Erro ao inicializar front-end:", e);
-            }
-        };
-
-                // 2. CONTORNO DO BLOQUEIO: O próprio navegador busca o Dólar na internet aberta
-                try {
-                    const resDolarDireto = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
-                    const dadosDolarDireto = await resDolarDireto.json();
-                    const cotacaoReal = float = parseFloat(dadosDolarDireto["USDBRL"]["bid"]);
-                    document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
-                    console.log("Dólar atualizado direto via Frontend: R$", cotacaoReal);
-                } catch (erroFrontend) {
-                    console.warn("Falha ao buscar dólar pelo navegador, tentando via Python...", erroFrontend);
-                    // Fallback caso a internet do usuário bloqueie: tenta puxar o padrão do Python
-                    const resDolar = await fetch(`${API_BASE}/api/dolar`);
-                    const dadosDolar = await resDolar.json();
-                    document.getElementById('dolar_dia').value = dadosDolar.cotacao.toFixed(4);
-                }
-                
-                calcularTudoEmTempoReal();
-            } catch (e) {
-                console.error("Erro ao inicializar front-end:", e);
-            }
-        };
-                const resDolar = await fetch(`${API_BASE}/api/dolar`);
-                const dadosDolar = await resDolar.json();
-                document.getElementById('dolar_dia').value = dadosDolar.cotacao.toFixed(4);
-                
-                calcularTudoEmTempoReal();
             } catch (e) {
                 console.error("Erro ao inicializar front-end:", e);
             }
@@ -237,7 +159,6 @@
                 const qtdVal = parseInt(document.getElementById(`qtd_${i}`).value) || 0;
                 const valUnit = parseFloat(document.getElementById(`val_${i}`).value) || 0;
 
-                // Calcula e atualiza dinamicamente o valor da linha em R$
                 const valorLinhaReal = dolarDia * valUnit;
                 const tdLinha = document.getElementById(`linha_reais_${i}`);
                 if(tdLinha) {
@@ -311,11 +232,9 @@
                 
                 copiaTranspText = `Olá, por gentileza, cotar para retira/entrega\n\nVolume: 1\nCX: ${dados.caixa_sugerida}\nCxLxA: ${dados.cx_l_a}\nPeso: ${(dados.peso_total_g / 1000).toFixed(3)} kg\nValor da NF: ${dados.valor_nf_formatado}\nCEP: ${cep}`;
 
-                // Processa a matemática matemática do fechamento totalizador
                 const valorFreteFloat = parseFloat(dados.preco_estimado.replace(",", "."));
                 const valorComFreteGlobal = totalConvertidoRealGlobal + valorFreteFloat;
 
-                // RETORNO ATUALIZADO COM QUADRO DE FECHAMENTO FINANCEIRO COMPLETO
                 painel.innerHTML = `
                     <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 grid grid-cols-3 divide-x divide-amber-200 text-center shadow-sm">
                         <div>
