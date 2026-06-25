@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import httpx
 
-app = FastAPI(title="Calculadora de Cubagem Multitens - Revisada")
+app = FastAPI(title="Calculadora de Cubagem Multitens - Corrigida")
 
 # Configurações de Origem da sua Empresa
 CEP_ORIGEM_PADRAO = "37642162"
@@ -99,10 +99,14 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         raise HTTPException(status_code=400, detail="Nenhum produto selecionado.")
     
     peso_total_produtos_g = 0
-    caixa_sugerida_id = 1
     possui_lumini = False
-    total_volumes = 1  # Nova variável de controle comercial
-
+    
+    # Nova abordagem matemática de volumes baseada na capacidade física real
+    caixa_sugerida_id = 1
+    total_volumes = 1
+    
+    # 1. Primeiro passo: Descobrir se o pedido cabe nas caixas menores (1 a 4)
+    # ou se vai estourar para a maior caixa disponível (5 ou 6)
     for item in itens_validos:
         prod_id = item.produto_id
         if prod_id == "W16":
@@ -112,34 +116,44 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         qtd = item.quantidade
         peso_total_produtos_g += (produto["peso_g"] * qtd)
         
-        # 1. Identifica o tamanho de caixa necessário para a linha atual
-        caixa_item_id = 1
         for c_id in ["1", "2", "3", "4", "5", "6"]:
-            limite_max = produto["max_por_caixa"].get(c_id, 9999)
-            if qtd <= math.floor(float(limite_max)):
-                caixa_item_id = int(c_id)
+            limite_max = float(produto["max_por_caixa"].get(c_id, 9999))
+            if qtd > limite_max:
+                # Se estourou o limite da caixa atual, força a subir o tamanho da caixa de referência
+                if int(c_id) >= caixa_sugerida_id:
+                    caixa_sugerida_id = max(caixa_sugerida_id, int(c_id) + 1)
+            else:
+                if int(c_id) > caixa_sugerida_id:
+                    caixa_sugerida_id = max(caixa_sugerida_id, int(c_id))
                 break
-        else:
-            # 2. SE ESTOURAR A CAPACIDADE MÁXIMA DA CAIXA 5/6: Calcula o desmembramento de volumes
-            caixa_item_id = 5
-            limite_caixa_max = float(produto["max_por_caixa"].get("5", 100))
-            volumes_deste_item = math.ceil(qtd / limite_caixa_max)
-            if volumes_deste_item > total_volumes:
-                total_volumes = volumes_deste_item
-            
-        if caixa_item_id > caixa_sugerida_id:
-            caixa_sugerida_id = caixa_item_id
 
-    # Ajuste de engenharia da Lumini para a maior caixa
+    # 2. Se a caixa necessária for a 5 ou a 6, vamos aplicar a regra de desmembramento em lotes
+    if caixa_sugerida_id >= 5:
+        caixa_sugerida_id = 5 # Base padrão de cálculo
+        max_volumes_encontrado = 1
+        
+        for item in itens_validos:
+            produto = PRODUTOS_DB.get(item.produto_id, PRODUTOS_DB["OUTROS"])
+            limite_caixa_5 = float(produto["max_por_caixa"].get("5", 100))
+            
+            # Se a quantidade de um único item for maior do que cabe na Caixa 5, divide
+            if item.quantidade > limite_caixa_5:
+                volumes_necessarios = math.ceil(item.quantidade / limite_caixa_5)
+                if volumes_necessarios > max_volumes_encontrado:
+                    max_volumes_encontrado = volumes_necessarios
+                    
+        total_volumes = max_volumes_encontrado
+
+    # Ajuste final de engenharia da Lumini para definir o rótulo da caixa principal
     str_caixa_id = str(caixa_sugerida_id)
-    if str_caixa_id == "6" and not possui_lumini:
-        str_caixa_id = "5"
-    elif possui_lumini and str_caixa_id == "5":
+    if str_caixa_id == "5" and possui_lumini:
         str_caixa_id = "6"
+    elif str_caixa_id == "6" and not possui_lumini:
+        str_caixa_id = "5"
 
     dados_caixa = MATRIZ_CAIXAS[str_caixa_id]
     
-    # 3. O peso da embalagem agora multiplica pela quantidade real de volumes gerados
+    # O peso das embalagens vazias multiplica pelo número total de caixas geradas
     peso_final_com_caixa_g = peso_total_produtos_g + (dados_caixa["peso_vazia_g"] * total_volumes)
     
     nf_limpa = req.valor_nf if req.valor_nf else 0.0
@@ -148,7 +162,7 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
     prefixo_cep = int(req.cep_destino.replace("-","")[:2]) if len(req.cep_destino) >= 2 else 10
     base = 24.50 if prefixo_cep < 40 else 48.00
     
-    # Ajuste financeiro: Adiciona uma taxa incremental leve por volume extra para cobrir o manuseio
+    # Taxa logística incremental por caixa despachada
     taxa_volumes_extra = (total_volumes - 1) * 8.50
     valor_final_frete = base + ((peso_final_com_caixa_g/1000) * 3.50) + taxa_nf + taxa_volumes_extra
 
@@ -163,7 +177,7 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         "origem": CEP_ORIGEM_PADRAO,
         "endereco_origem": ENDERECO_ORIGEM,
         "valor_nf_formatado": f"R$ {nf_limpa:.2f}".replace(".", ","),
-        "total_volumes": total_volumes  # Devolve o número real de caixas calculadas
+        "total_volumes": total_volumes
     }
 
 if __name__ == "__main__":
