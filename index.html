@@ -228,9 +228,10 @@
                     divCaixa.className = "border-2 p-1.5 rounded opacity-100 bg-blue-50 border-blue-500 font-bold text-center ring-2 ring-blue-100";
                 }
 
-                copiaSedexText = `Origem: ${dados.origem}\nDestino: ${cep}\nValor NF: ${dados.valor_nf_formatado}\nFormato: ${dados.caixa_sugerida}\nPeso: ${(dados.peso_total_g / 1000).toFixed(3)} kg\nCxLxA: ${dados.cx_l_a}\nAltura: ${dados.dim_dados.a} cm\nLargura: ${dados.dim_dados.l} cm\nComprimento: ${dados.dim_dados.c} cm`;
+                // Ajuste estrutural: Blocos de cópia agora exibem a quantidade correta de caixas (volumes) calculadas pelo backend
+                copiaSedexText = `Origem: ${dados.origem}\nDestino: ${cep}\nValor NF: ${dados.valor_nf_formatado}\nFormato Embalagem: ${dados.caixa_sugerida}\nTotal Volumes: ${dados.total_volumes}\nPeso Total Bruto: ${(dados.peso_total_g / 1000).toFixed(3)} kg\nCxLxA Unitário: ${dados.cx_l_a}\nAltura: ${dados.dim_dados.a} cm\nLargura: ${dados.dim_dados.l} cm\nComprimento: ${dados.dim_dados.c} cm`;
                 
-                copiaTranspText = `Olá, por gentileza, cotar para retira/entrega\n\nVolume: 1\nCX: ${dados.caixa_sugerida}\nCxLxA: ${dados.cx_l_a}\nPeso: ${(dados.peso_total_g / 1000).toFixed(3)} kg\nValor da NF: ${dados.valor_nf_formatado}\nCEP: ${cep}`;
+                copiaTranspText = `Olá, por gentileza, cotar para retira/entrega\n\nVolumes: ${dados.total_volumes}\nEmbalagem Padrão: ${dados.caixa_sugerida}\nDimensões Ref: ${dados.cx_l_a}\nPeso Bruto Total: ${(dados.peso_total_g / 1000).toFixed(3)} kg\nValor da NF: ${dados.valor_nf_formatado}\nCEP Destino: ${cep}`;
 
                 const valorFreteFloat = parseFloat(dados.preco_estimado.replace(",", "."));
                 const valorComFreteGlobal = totalConvertidoRealGlobal + valorFreteFloat;
