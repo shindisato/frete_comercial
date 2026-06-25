@@ -11,7 +11,7 @@ app = FastAPI(title="Calculadora de Cubagem Multitens - Revisada")
 CEP_ORIGEM_PADRAO = "37642162"
 ENDERECO_ORIGEM = "Rua das Flores, 123 - Distrito Industrial, Extrema - MG"
 
-# Liberação de segurança para o HTML local conversar com o Python
+# Liberação de segurança para o HTML local/externo conversar com o Python
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -82,7 +82,6 @@ def listar_produtos():
     lista = [{"id": k, "nome": v["nome"]} for k, v in PRODUTOS_DB.items()]
     return sorted(lista, key=lambda x: x["id"] == "OUTROS")
 
-# CORREÇÃO CRÍTICA: Rota do dólar revisada e limpa de erros de sintaxe
 @app.get("/api/dolar")
 def obter_cotacao_dolar():
     try:
@@ -94,7 +93,7 @@ def obter_cotacao_dolar():
                 return {"cotacao": valor_dolar, "status": "sucesso"}
     except Exception as e:
         print(f"Erro ao buscar cotação: {e}")
-    return {"cotacao": 5.00, "status": "fallback"}
+    return {"cotacao": 5.20, "status": "fallback"}
 
 @app.post("/api/sugerir-caixa")
 def sugerir_caixa(req: RequisicaoCubagemLote):
@@ -103,7 +102,7 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         raise HTTPException(status_code=400, detail="Nenhum produto selecionado.")
     
     peso_total_produtos_g = 0
-    caixa_sugerida_id = "1"
+    caixa_sugerida_id = 1
     possui_lumini = False
     
     for item in itens_validos:
@@ -111,26 +110,33 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         if prod_id == "W16":
             possui_lumini = True
             
-        produto = PRODUTOS_DB.get(prod_id, PRODUTOS_DB["OUTROS"])
+        produto = PRODUTOS_DB.get(prod_id, PROVISIONAL_DB := PRODUTOS_DB["OUTROS"])
         qtd = item.quantidade
         peso_total_produtos_g += (produto["peso_g"] * qtd)
         
+        # Correção da Lógica Matemática de Acúmulo de Volume por Caixa
+        caixa_item_id = 1
         for c_id in ["1", "2", "3", "4", "5", "6"]:
             limite_max = produto["max_por_caixa"].get(c_id, 9999)
             if qtd <= math.floor(float(limite_max)):
-                if int(c_id) > int(caixa_sugerida_id):
-                    caixa_sugerida_id = c_id
+                caixa_item_id = int(c_id)
                 break
         else:
-            caixa_sugerida_id = "5"
+            # Caso estoure até a CX 5, força a maior caixa padrão e emite um aviso conceitual interno
+            caixa_item_id = 5
+            
+        # O sistema sempre escolhe a MAIOR caixa demandada pela combinação de itens do lote
+        if caixa_item_id > caixa_sugerida_id:
+            caixa_sugerida_id = caixa_item_id
 
-    # TRAVA DE ENGENHARIA DA LUMINI (CX 6 é exclusiva)
-    if caixa_sugerida_id == "6" and not possui_lumini:
-        caixa_sugerida_id = "5"
-    elif possui_lumini and caixa_sugerida_id == "5":
-        caixa_sugerida_id = "6"
+    # TRAVA DE ENGENHARIA DA LUMINI (CX 6 é exclusiva e obrigatória para o W16 se chegar no patamar da CX 5)
+    str_caixa_id = str(caixa_sugerida_id)
+    if str_caixa_id == "6" and not possui_lumini:
+        str_caixa_id = "5"
+    elif possui_lumini and str_caixa_id == "5":
+        str_caixa_id = "6"
 
-    dados_caixa = MATRIZ_CAIXAS[caixa_sugerida_id]
+    dados_caixa = MATRIZ_CAIXAS[str_caixa_id]
     peso_final_com_caixa_g = peso_total_produtos_g + dados_caixa["peso_vazia_g"]
     
     # Regra financeira do seguro da Nota Fiscal
@@ -148,7 +154,7 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
         "cx_l_a": f"{math.ceil(dados_caixa['comprimento'])}x{math.ceil(dados_caixa['largura'])}x{math.ceil(dados_caixa['altura'])} cm",
         "dim_dados": {"c": math.ceil(dados_caixa['comprimento']), "l": math.ceil(dados_caixa['largura']), "a": math.ceil(dados_caixa['altura'])},
         "peso_total_g": peso_final_com_caixa_g,
-        "caixa_id": caixa_sugerida_id,
+        "caixa_id": str_caixa_id,
         "preco_estimado": f"{valor_final_frete:.2f}".replace(".", ","),
         "origem": CEP_ORIGEM_PADRAO,
         "endereco_origem": ENDERECO_ORIGEM,
@@ -158,6 +164,5 @@ def sugerir_caixa(req: RequisicaoCubagemLote):
 if __name__ == "__main__":
     import uvicorn
     import os
-    # O Render vai injetar a porta correta aqui. Se não achar, usa a 8000 como segurança local.
     porta = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=porta, reload=False)
