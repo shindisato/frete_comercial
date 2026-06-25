@@ -85,21 +85,16 @@ def listar_produtos():
 # CORREÇÃO CRÍTICA: Rota do dólar revisada e limpa de erros de sintaxe
 @app.get("/api/dolar")
 def obter_cotacao_dolar():
-    import httpx
-    # Link alternativo de alta estabilidade
-    url = "https://economia.awesomeapi.com.br/json/last/USD-BRL"
     try:
-        response = httpx.get(url, timeout=5.0)
-        if response.status_code == 200:
-            dados = response.json()
-            # Puxa o valor atual de compra do dólar comercial
-            cotacao = float(dados["USDBRL"]["bid"])
-            return {"cotacao": cotacao, "status": "sucesso"}
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get("https://economia.awesomeapi.com.br/json/last/USD-BRL")
+            if response.status_code == 200:
+                dados = response.json()
+                valor_dolar = float(dados["USDBRL"]["bid"])
+                return {"cotacao": valor_dolar, "status": "sucesso"}
     except Exception as e:
         print(f"Erro ao buscar cotação: {e}")
-    
-    # Se der qualquer pane na API externa, o sistema usa o valor de mercado atualizado como segurança
-    return {"cotacao": 5.2000, "status": "fallback"}
+    return {"cotacao": 5.00, "status": "fallback"}
 
 @app.post("/api/sugerir-caixa")
 def sugerir_caixa(req: RequisicaoCubagemLote):
