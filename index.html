@@ -90,9 +90,9 @@
         let copiaSedexText = "";
         let copiaTranspText = "";
 
-        window.onload = async function() {
+       window.onload = async function() {
             try {
-                // 1. Busca a lista de produtos normalmente no seu backend Python
+                // 1. Busca a lista de produtos no seu backend Python
                 const response = await fetch(`${API_BASE}/api/produtos`);
                 cacheProdutos = await response.json();
                 
@@ -124,6 +124,35 @@
                         </tr>
                     `;
                 }
+
+                // 2. CORREÇÃO DA SINTAXE: Função autoverificável para buscar o dólar de forma isolada e assíncrona
+                const buscarDolarNoNavegador = async () => {
+                    try {
+                        const resDolarDireto = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL");
+                        const dadosDolarDireto = await resDolarDireto.json();
+                        const cotacaoReal = parseFloat(dadosDolarDireto["USDBRL"]["bid"]);
+                        document.getElementById('dolar_dia').value = cotacaoReal.toFixed(4);
+                        console.log("Dólar atualizado direto via Frontend: R$", cotacaoReal);
+                    } catch (erroFrontend) {
+                        console.warn("Falha ao buscar dólar pelo navegador, tentando via Python...", erroFrontend);
+                        try {
+                            const resDolar = await fetch(`${API_BASE}/api/dolar`);
+                            const dadosDolar = await resDolar.json();
+                            document.getElementById('dolar_dia').value = dadosDolar.get = dadosDolar.cotacao.toFixed(4);
+                        } catch (e) {
+                            document.getElementById('dolar_dia').value = "5.2000";
+                        }
+                    }
+                    calcularTudoEmTempoReal();
+                };
+
+                // Executa a busca do dólar de forma segura
+                await buscarDolarNoNavegador();
+
+            } catch (e) {
+                console.error("Erro ao inicializar front-end:", e);
+            }
+        };
 
                 // 2. CONTORNO DO BLOQUEIO: O próprio navegador busca o Dólar na internet aberta
                 try {
